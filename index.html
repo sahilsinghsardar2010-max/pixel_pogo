@@ -1,0 +1,124 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no">
+<meta name="theme-color" content="#18234d"><title>Pixel Pogo — platform adventure</title>
+<style>
+  :root{color-scheme:dark;--navy:#18234d;--ink:#fff8e7;--gold:#ffd45d;--mint:#75edc0}
+  *{box-sizing:border-box}body{margin:0;min-height:100vh;background:radial-gradient(ellipse at 50% 0%,#334b89 0,#18234d 54%,#111936 100%);color:var(--ink);font-family:system-ui,Segoe UI,sans-serif;display:grid;place-items:center;padding:20px}
+  .wrap{width:min(100%,1040px)}.top{display:flex;justify-content:space-between;align-items:center;gap:14px;margin:0 4px 13px}.logo{font-weight:900;letter-spacing:.04em;font-size:18px}.logo span{color:var(--gold)}.note{color:#b9c7e5;font-size:12px}
+  .cabinet{background:#111936;border:1px solid #ffffff20;border-radius:22px;padding:12px;box-shadow:0 28px 80px #080d2480}.screen{position:relative;overflow:hidden;border-radius:14px;background:#98dfff;aspect-ratio:16/9;min-height:260px;touch-action:none}canvas{display:block;width:100%;height:100%;image-rendering:pixelated}
+  .hud{position:absolute;top:13px;left:15px;right:15px;display:flex;align-items:center;justify-content:space-between;pointer-events:none;text-shadow:0 2px 3px #15345580;font-size:14px;font-weight:800}.pill{background:#18234dbb;border:1px solid #ffffff38;padding:8px 12px;border-radius:12px;backdrop-filter:blur(4px)}.progress{position:absolute;left:50%;top:20px;transform:translateX(-50%);width:min(34%,260px);height:9px;border:1px solid #ffffffa0;background:#19345a55;border-radius:10px;overflow:hidden}.progress b{display:block;height:100%;width:0;background:linear-gradient(90deg,#a0ffcd,#ffe574);border-radius:10px;transition:width .15s}
+  .overlay{position:absolute;inset:0;background:#142047a6;display:grid;place-items:center;padding:20px;text-align:center}.panel{max-width:480px;background:#192650ee;border:1px solid #ffffff40;border-radius:20px;padding:25px 28px;box-shadow:0 14px 40px #0c123777}.panel .mark{font-size:42px;line-height:1}.panel h1{margin:8px 0;font-size:30px;letter-spacing:-.04em}.panel p{color:#d7e2f5;line-height:1.5;margin:8px 0 18px}.mainbtn{border:0;background:linear-gradient(135deg,#ffe47c,#ffbd42);color:#46330c;font-weight:900;padding:12px 22px;border-radius:12px;box-shadow:0 5px 0 #bd812d;cursor:pointer}.mainbtn:hover{filter:brightness(1.06);transform:translateY(-1px)}.tip{font-size:12px!important;color:#aebfe2!important;margin-top:16px!important}.bottom{display:flex;justify-content:space-between;color:#aebfe2;font-size:12px;padding:13px 4px 0}.touch{display:none;position:absolute;bottom:12px;left:12px;right:12px;justify-content:space-between;pointer-events:none}.touchgroup{display:flex;gap:10px}.touch button{pointer-events:auto;width:56px;height:56px;border:1px solid #ffffff70;border-radius:16px;background:#18234dbb;color:#fff;font-size:23px;font-weight:800;touch-action:none;user-select:none}
+  @media(max-width:650px){body{padding:10px}.top{margin:0 3px 9px}.logo{font-size:15px}.note{font-size:10px;text-align:right}.cabinet{padding:7px;border-radius:16px}.screen{min-height:230px}.hud{top:8px;left:8px;right:8px;font-size:11px}.pill{padding:6px 8px}.progress{top:15px;width:27%}.touch{display:flex}.bottom{font-size:10px}.panel{padding:19px}.panel h1{font-size:25px}}
+</style>
+</head>
+<body>
+<main class="wrap">
+  <div class="top"><div class="logo">PIXEL <span>POGO</span></div><div class="note">A tiny jump-and-collect adventure</div></div>
+  <div class="cabinet"><div class="screen" id="screen">
+    <canvas id="game" width="960" height="540" aria-label="Pixel Pogo platform game"></canvas>
+    <div class="hud"><div class="pill">✨ <span id="score">0</span></div><div class="pill stage" id="levelName">Level 1 · Sunrise Meadow</div><div class="progress"><b id="progress"></b></div><div class="pill">♥ <span id="lives">3</span></div></div>
+    <div class="touch" aria-label="Touch controls"><div class="touchgroup"><button data-key="left" aria-label="Move left">◀</button><button data-key="right" aria-label="Move right">▶</button></div><button data-key="jump" aria-label="Jump">↑</button></div>
+    <div class="overlay" id="overlay"><div class="panel"><div class="mark">🌙</div><h1 id="overlayTitle">Pixel Pogo</h1><p id="overlayText">Adventure through three different worlds, collect star-orbs, and bounce on monsters to defeat them.</p><button class="mainbtn" id="startButton">Start adventure</button><p class="tip">Move with ← → or A / D · Jump with Space, ↑, or W<br>On a phone? Use the on-screen buttons.</p></div></div>
+  </div></div>
+  <div class="bottom"><span>Collect orbs ✨ · Stomp monsters from above</span><span>A/D or arrows · Space to jump</span></div>
+</main>
+<script>
+(() => {
+  const canvas = document.getElementById('game'), ctx = canvas.getContext('2d');
+  const W = canvas.width, H = canvas.height;
+  const $ = id => document.getElementById(id);
+  const scoreEl=$('score'), livesEl=$('lives'), progressEl=$('progress'), levelNameEl=$('levelName');
+  const overlay=$('overlay'), titleEl=$('overlayTitle'), textEl=$('overlayText'), startButton=$('startButton');
+  const keys={left:false,right:false,jump:false};
+  const levels=[
+    {name:'Sunrise Meadow',width:2500,sky:['#7ad8ff','#d5f7ff'],hill:'#62c79b',ground:'#ad7448',grass:'#6cbd68',orb:'#ffbf39',
+     platforms:[[0,468,500,100],[580,468,390,100],[1050,468,400,100],[1530,468,390,100],[2000,468,500,100],[230,375,150,20],[650,370,155,20],[1090,360,165,20],[1320,315,140,20],[1600,370,155,20],[1830,325,145,20],[2100,365,165,20],[2260,315,140,20]],
+     orbs:[[150,420],[275,330],[355,330],[650,420],[710,325],[790,325],[1100,420],[1180,315],[1360,270],[1600,420],[1660,325],[1740,325],[1870,280],[2100,420],[2160,320],[2250,320],[2320,270],[2410,420]],
+     monsters:[['slime',740,437,610,920,48],['crab',1640,437,1550,1880,55]]},
+    {name:'Crystal Caverns',width:2500,sky:['#30285e','#171b3f'],hill:'#474b83',ground:'#5e547f',grass:'#a08bce',orb:'#89f5ff',
+     platforms:[[0,468,430,100],[520,468,420,100],[1040,468,400,100],[1540,468,410,100],[2050,468,450,100],[145,380,155,20],[560,350,170,20],[850,300,145,20],[1100,370,150,20],[1370,315,155,20],[1600,370,150,20],[1840,300,155,20],[2110,365,150,20],[2310,310,125,20]],
+     orbs:[[145,420],[210,335],[565,420],[625,305],[895,255],[1100,420],[1165,325],[1400,270],[1630,420],[1670,325],[1880,255],[2130,420],[2170,320],[2350,265],[2460,420]],
+     monsters:[['bat',660,285,550,760,72],['crystal',1210,437,1070,1400,48],['bat',1910,235,1830,2010,84],['crystal',2200,437,2100,2450,58]]},
+    {name:'Ember Foundry',width:2600,sky:['#583454','#251c3d'],hill:'#8b4354',ground:'#6b3b49',grass:'#f07b55',orb:'#ffe27a',
+     platforms:[[0,468,430,100],[520,468,410,100],[1030,468,430,100],[1560,468,400,100],[2060,468,540,100],[190,365,160,20],[590,320,150,20],[825,365,145,20],[1090,310,160,20],[1320,360,145,20],[1620,310,155,20],[1850,360,150,20],[2130,305,165,20],[2380,365,140,20]],
+     orbs:[[170,420],[230,320],[620,420],[650,275],[880,320],[1100,420],[1140,265],[1360,315],[1640,420],[1670,265],[1900,315],[2140,420],[2200,260],[2430,315],[2540,420]],
+     monsters:[['fireling',650,437,540,900,66],['hopper',1170,437,1060,1410,74],['fireling',1710,437,1580,1910,70],['hopper',2210,437,2090,2510,82]]}
+  ];
+  let levelIndex=0,level,worldW,platforms=[],orbs=[],enemies=[],player,camera=0,score=0,lives=3,state='ready',last=0,invincible=0,checkpoint=60,banner=0;
+
+  function loadLevel(index){
+    levelIndex=index;level=levels[index];worldW=level.width;
+    platforms=level.platforms.map(([x,y,w,h])=>({x,y,w,h}));
+    orbs=level.orbs.map(([x,y])=>({x,y,taken:false}));
+    enemies=level.monsters.map(([type,x,y,min,max,v],i)=>({type,x,y,baseY:y,min,max,v,phase:i*1.7,w:32,h:30,alive:true}));
+    player={x:60,y:410,w:30,h:42,vx:0,vy:0,onGround:false,face:1};
+    camera=0;checkpoint=60;invincible=.5;banner=2.3;syncHud();
+  }
+  function reset(){score=0;lives=3;loadLevel(0);}
+  function syncHud(){scoreEl.textContent=score;livesEl.textContent=lives;levelNameEl.textContent=`Level ${levelIndex+1} · ${level.name}`;progressEl.style.width=`${Math.min(100,player?player.x/(worldW-80)*100:0)}%`;}
+  function start(){reset();state='playing';overlay.style.display='none';last=performance.now();requestAnimationFrame(loop);}
+  function finish(win){state=win?'won':'lost';titleEl.textContent=win?'All worlds cleared!':'Adventure over';textEl.textContent=win?`You explored all three worlds, collected ${score} orbs, and stomped the monsters. Great adventure!`:`You collected ${score} orbs. Want to try the three worlds again?`;startButton.textContent='Play again';overlay.querySelector('.tip').textContent='Press the button to start a fresh run.';overlay.style.display='grid';}
+  const overlap=(a,b)=>a.x<b.x+b.w&&a.x+a.w>b.x&&a.y<b.y+b.h&&a.y+a.h>b.y;
+
+  function update(dt,now){
+    const oldBottom=player.y+player.h;
+    player.vx=((keys.right?1:0)-(keys.left?1:0))*245;if(player.vx)player.face=Math.sign(player.vx);
+    if(keys.jump&&player.onGround){player.vy=-600;player.onGround=false;}
+    player.x=Math.max(0,Math.min(worldW-player.w,player.x+player.vx*dt));
+    for(const p of platforms)if(overlap(player,p)){if(player.vx>0)player.x=p.x-player.w;else if(player.vx<0)player.x=p.x+p.w;}
+    player.vy=Math.min(900,player.vy+1550*dt);player.y+=player.vy*dt;player.onGround=false;
+    for(const p of platforms)if(overlap(player,p)){if(player.vy>0){player.y=p.y-player.h;player.vy=0;player.onGround=true;}else if(player.vy<0){player.y=p.y+p.h;player.vy=0;}}
+    if(player.x>checkpoint+640)checkpoint=Math.floor(player.x/640)*640;
+    for(const orb of orbs)if(!orb.taken&&Math.hypot(player.x+15-orb.x,player.y+21-orb.y)<29){orb.taken=true;score++;}
+    for(const e of enemies){
+      if(!e.alive)continue;e.x+=e.v*dt;if(e.x<e.min||e.x>e.max)e.v*=-1;
+      if(e.type==='bat'||e.type==='fireling')e.y=e.baseY+Math.sin(now/190+e.phase)*(e.type==='bat'?22:8);
+      if(!overlap(player,e))continue;
+      if(player.vy>0&&oldBottom<=e.y+12){e.alive=false;player.y=e.y-player.h;player.vy=-420;score+=5;}
+      else if(invincible<=0){lives--;invincible=1.15;player.vy=-310;if(lives<=0){syncHud();finish(false);return;}}
+    }
+    invincible=Math.max(0,invincible-dt);
+    if(player.y>H+100){lives--;if(lives<=0){syncHud();finish(false);return;}player.x=checkpoint;player.y=360;player.vy=0;invincible=1.25;}
+    camera=Math.max(0,Math.min(worldW-W,player.x-W*.36));banner=Math.max(0,banner-dt);
+    if(player.x>worldW-105){if(levelIndex<levels.length-1)loadLevel(levelIndex+1);else{syncHud();finish(true);return;}}
+    syncHud();
+  }
+
+  function draw(){
+    const sky=ctx.createLinearGradient(0,0,0,H);sky.addColorStop(0,level.sky[0]);sky.addColorStop(1,level.sky[1]);ctx.fillStyle=sky;ctx.fillRect(0,0,W,H);
+    if(levelIndex===0)drawMeadow();if(levelIndex===1)drawCave();if(levelIndex===2)drawFoundry();
+    for(const p of platforms){const x=p.x-camera;if(x<-200||x>W+40)continue;if(p.h>25){ctx.fillStyle=level.grass;ctx.fillRect(x,p.y,p.w,13);ctx.fillStyle=level.ground;ctx.fillRect(x,p.y+13,p.w,p.h-13);for(let xx=x+10;xx<x+p.w;xx+=34){ctx.fillStyle='#332b4666';ctx.fillRect(xx,p.y+28,4,4);}}else{box(x,p.y,p.w,p.h,5,level.grass);ctx.fillStyle='#ffffff55';ctx.fillRect(x+4,p.y+3,p.w-8,4);ctx.fillStyle=level.hill;ctx.fillRect(x,p.y+p.h-3,p.w,3);}}
+    for(const o of orbs){if(o.taken)continue;const x=o.x-camera;if(x<-20||x>W+20)continue;ctx.save();ctx.translate(x,o.y+Math.sin(performance.now()/260+o.x*.04)*4);ctx.fillStyle='#fff8d6';ctx.beginPath();ctx.arc(0,0,11,0,Math.PI*2);ctx.fill();ctx.fillStyle=level.orb;ctx.beginPath();ctx.arc(0,0,7,0,Math.PI*2);ctx.fill();ctx.fillStyle='#fff';ctx.fillRect(-2,-6,3,4);ctx.restore();}
+    for(const e of enemies)if(e.alive)drawMonster(e);drawGate();
+    if(player&&(invincible<=0||Math.floor(performance.now()/90)%2===0)){const x=player.x-camera;if(player.face<0){ctx.save();ctx.translate(x+player.w,player.y);ctx.scale(-1,1);drawHero(0,0);ctx.restore();}else drawHero(x,player.y);}
+    if(banner>0){box(W/2-128,76,256,43,14,'#172346cc');ctx.fillStyle='#fff8e7';ctx.font='800 17px system-ui';ctx.textAlign='center';ctx.fillText(`LEVEL ${levelIndex+1} · ${level.name}`,W/2,104);}
+  }
+  function drawMeadow(){for(let i=0;i<6;i++){let x=((i*250-camera*.23)%(W+300)+W+300)%(W+300)-150;cloud(x,95+(i%3)*58);}for(let i=0;i<5;i++){let x=((i*280-camera*.17)%(W+300)+W+300)%(W+300)-150;ctx.fillStyle=level.hill;ctx.beginPath();ctx.ellipse(x,375,220,110,0,Math.PI,Math.PI*2);ctx.fill();}}
+  function drawCave(){for(let i=0;i<12;i++){let x=((i*111-camera*.12)%(W+100)+W+100)%(W+100)-40,top=35+(i*37)%95;ctx.fillStyle=i%2?'#766ab1':'#564e91';ctx.beginPath();ctx.moveTo(x,0);ctx.lineTo(x+22,top+26);ctx.lineTo(x+45,0);ctx.fill();}for(let i=0;i<8;i++){let x=((i*155-camera*.2)%(W+120)+W+120)%(W+120)-40,y=380+(i%2)*24;ctx.fillStyle=i%2?'#78e7df':'#a18cff';ctx.beginPath();ctx.moveTo(x,y);ctx.lineTo(x+17,y-60-(i%3)*12);ctx.lineTo(x+35,y);ctx.closePath();ctx.fill();ctx.fillStyle='#fff8';ctx.fillRect(x+14,y-43,3,24);}}
+  function drawFoundry(){for(let i=0;i<7;i++){let x=((i*190-camera*.15)%(W+220)+W+220)%(W+220)-60,y=370+(i%2)*24;ctx.fillStyle='#ef694c55';ctx.beginPath();ctx.ellipse(x,y,145,48,0,Math.PI,Math.PI*2);ctx.fill();}for(let i=0;i<9;i++){let x=((i*137-camera*.22)%(W+140)+W+140)%(W+140)-35,y=160+(i*31)%220;ctx.fillStyle='#ffc56a';ctx.globalAlpha=.45;ctx.fillRect(x,y,3,9);ctx.globalAlpha=1;}}
+  function cloud(x,y){ctx.fillStyle='#ffffffd9';ctx.beginPath();ctx.arc(x,y,23,0,Math.PI*2);ctx.arc(x+25,y-8,31,0,Math.PI*2);ctx.arc(x+57,y,22,0,Math.PI*2);ctx.fill();ctx.fillRect(x-1,y,69,15);}
+  function box(x,y,w,h,r,color){ctx.fillStyle=color;ctx.beginPath();ctx.roundRect(x,y,w,h,r);ctx.fill();}
+  function drawMonster(e){
+    const x=e.x-camera,y=e.y;
+    if(e.type==='slime'){box(x,y+7,32,23,12,'#4dbb82');box(x+5,y,22,15,9,'#75e5a0');ctx.fillStyle='#fff';ctx.fillRect(x+9,y+10,5,7);ctx.fillRect(x+20,y+10,5,7);ctx.fillStyle='#1e4151';ctx.fillRect(x+11,y+13,2,3);ctx.fillRect(x+22,y+13,2,3);}
+    if(e.type==='crab'){box(x+4,y+7,25,21,8,'#ee745f');ctx.fillStyle='#ffb082';ctx.fillRect(x+8,y+1,5,9);ctx.fillRect(x+21,y+1,5,9);ctx.fillStyle='#fff';ctx.fillRect(x+9,y+10,5,6);ctx.fillRect(x+20,y+10,5,6);ctx.fillStyle='#393454';ctx.fillRect(x+11,y+12,2,3);ctx.fillRect(x+22,y+12,2,3);ctx.fillStyle='#ba4d60';ctx.fillRect(x,y+17,6,4);ctx.fillRect(x+28,y+17,6,4);}
+    if(e.type==='bat'){ctx.fillStyle='#936de0';ctx.beginPath();ctx.moveTo(x+16,y+11);ctx.lineTo(x-3,y-1);ctx.lineTo(x+2,y+23);ctx.lineTo(x+16,y+18);ctx.lineTo(x+30,y+23);ctx.lineTo(x+35,y-1);ctx.closePath();ctx.fill();box(x+9,y+5,15,21,8,'#654db0');ctx.fillStyle='#fff';ctx.fillRect(x+11,y+11,4,5);ctx.fillRect(x+19,y+11,4,5);ctx.fillStyle='#27234a';ctx.fillRect(x+12,y+13,2,3);ctx.fillRect(x+20,y+13,2,3);}
+    if(e.type==='crystal'){ctx.fillStyle='#a977ed';ctx.beginPath();ctx.moveTo(x+16,y);ctx.lineTo(x+31,y+12);ctx.lineTo(x+25,y+30);ctx.lineTo(x+7,y+30);ctx.lineTo(x+1,y+12);ctx.closePath();ctx.fill();ctx.fillStyle='#d6b5ff';ctx.beginPath();ctx.moveTo(x+16,y+3);ctx.lineTo(x+22,y+13);ctx.lineTo(x+16,y+25);ctx.lineTo(x+10,y+13);ctx.closePath();ctx.fill();ctx.fillStyle='#302951';ctx.fillRect(x+9,y+15,3,4);ctx.fillRect(x+21,y+15,3,4);}
+    if(e.type==='fireling'){ctx.fillStyle='#ff773d';ctx.beginPath();ctx.moveTo(x+16,y);ctx.quadraticCurveTo(x+10,y+10,x+5,y+12);ctx.quadraticCurveTo(x-1,y+30,x+16,y+30);ctx.quadraticCurveTo(x+35,y+30,x+28,y+11);ctx.quadraticCurveTo(x+22,y+13,x+16,y);ctx.fill();ctx.fillStyle='#ffd35b';ctx.beginPath();ctx.ellipse(x+16,y+20,8,9,0,0,Math.PI*2);ctx.fill();ctx.fillStyle='#422a3e';ctx.fillRect(x+12,y+15,3,4);ctx.fillRect(x+20,y+15,3,4);}
+    if(e.type==='hopper'){box(x+3,y+5,27,25,9,'#a95c4c');ctx.fillStyle='#f1ad67';ctx.beginPath();ctx.moveTo(x+7,y+8);ctx.lineTo(x+7,y-1);ctx.lineTo(x+14,y+7);ctx.fill();ctx.beginPath();ctx.moveTo(x+25,y+8);ctx.lineTo(x+27,y-1);ctx.lineTo(x+19,y+7);ctx.fill();ctx.fillStyle='#fff';ctx.fillRect(x+8,y+12,6,7);ctx.fillRect(x+20,y+12,6,7);ctx.fillStyle='#34273f';ctx.fillRect(x+11,y+14,2,4);ctx.fillRect(x+22,y+14,2,4);ctx.fillStyle='#714050';ctx.fillRect(x+1,y+27,10,5);ctx.fillRect(x+22,y+27,10,5);}
+  }
+  function drawGate(){const x=worldW-105-camera;if(x<-100||x>W+100)return;ctx.fillStyle='#28355f';ctx.fillRect(x,345,14,123);ctx.fillRect(x+76,345,14,123);ctx.fillStyle=level.orb;ctx.fillRect(x-5,337,100,15);ctx.fillStyle='#d8d0ff';ctx.beginPath();ctx.arc(x+45,397,29,Math.PI,0);ctx.lineTo(x+74,440);ctx.lineTo(x+16,440);ctx.closePath();ctx.fill();ctx.fillStyle=level.hill;ctx.beginPath();ctx.arc(x+45,397,17,Math.PI,0);ctx.lineTo(x+62,427);ctx.lineTo(x+28,427);ctx.closePath();ctx.fill();ctx.fillStyle='#fff5af';ctx.fillRect(x+41,390,8,8);}
+  function drawHero(x,y){box(x+4,y+1,22,14,5,'#ff985d');box(x+7,y+4,6,5,2,'#fff0cf');box(x+5,y+13,21,16,4,'#29a99b');ctx.fillStyle='#f2c79b';ctx.fillRect(x+9,y+15,15,12);ctx.fillStyle='#212c51';ctx.fillRect(x+20,y+18,3,4);ctx.fillStyle='#f9d456';ctx.fillRect(x+14,y+20,5,5);box(x+3,y+27,24,10,3,'#3156a4');ctx.fillStyle='#283555';ctx.fillRect(x+2,y+36,11,5);ctx.fillRect(x+19,y+36,11,5);ctx.fillStyle='#fff';ctx.fillRect(x+7,y+16,3,3);}
+  function loop(now){if(state!=='playing')return;const dt=Math.min(.03,(now-last)/1000||0);last=now;update(dt,now);draw();if(state==='playing')requestAnimationFrame(loop);}
+  function setKey(key,value){keys[key]=value;}
+  document.addEventListener('keydown',e=>{if(['ArrowLeft','ArrowRight','ArrowUp',' ','a','A','d','D','w','W'].includes(e.key))e.preventDefault();if(e.key==='ArrowLeft'||e.key==='a'||e.key==='A')setKey('left',true);if(e.key==='ArrowRight'||e.key==='d'||e.key==='D')setKey('right',true);if(e.key==='ArrowUp'||e.key===' '||e.key==='w'||e.key==='W')setKey('jump',true);});
+  document.addEventListener('keyup',e=>{if(e.key==='ArrowLeft'||e.key==='a'||e.key==='A')setKey('left',false);if(e.key==='ArrowRight'||e.key==='d'||e.key==='D')setKey('right',false);if(e.key==='ArrowUp'||e.key===' '||e.key==='w'||e.key==='W')setKey('jump',false);});
+  document.querySelectorAll('.touch button').forEach(button=>{const k=button.dataset.key;button.addEventListener('pointerdown',e=>{e.preventDefault();button.setPointerCapture(e.pointerId);setKey(k,true);});for(const name of ['pointerup','pointercancel','lostpointercapture'])button.addEventListener(name,()=>setKey(k,false));});
+  startButton.addEventListener('click',()=>{overlay.querySelector('.tip').innerHTML='Move with ← → or A / D · Jump with Space, ↑, or W<br>On a phone? Use the on-screen buttons.';start();});
+  loadLevel(0);state='ready';draw();
+})();
+</script>
+</body>
+</html>
